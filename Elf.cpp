@@ -121,25 +121,29 @@ void Elf::ParseDl() {
                dyn->d_tag != DT_NULL; dyn++)
             switch (dyn->d_tag) {
               case DT_HASH: {
-                if (dyn->d_un.d_ptr >= info->dlpi_addr) {
-                  auto hash = (ElfW(Word*))dyn->d_un.d_ptr;
-                  symCnt = hash[1];
-                } else {
-                  // TODO vdso printf("bad address\n");
-                }
+                auto hash =
+                    (ElfW(Word*))(dyn->d_un.d_ptr >= info->dlpi_addr
+                                      ? dyn->d_un.d_ptr
+                                      : dyn->d_un.d_ptr + info->dlpi_addr);
+                symCnt = hash[1];
               } break;
               case DT_GNU_HASH:
-                if (dyn->d_un.d_ptr >= info->dlpi_addr) {
-                  gnuSymCnt = ParseGnuHash(dyn->d_un.d_ptr);
-                } else {
-                  // TODO vdso printf("bad address\n");
-                }
+                gnuSymCnt =
+                    ParseGnuHash(dyn->d_un.d_ptr >= info->dlpi_addr
+                                     ? dyn->d_un.d_ptr
+                                     : dyn->d_un.d_ptr + info->dlpi_addr);
                 break;
               case DT_STRTAB:
-                strtab = reinterpret_cast<const char*>(dyn->d_un.d_ptr);
+                strtab = reinterpret_cast<const char*>(
+                    dyn->d_un.d_ptr >= info->dlpi_addr
+                        ? dyn->d_un.d_ptr
+                        : dyn->d_un.d_ptr + info->dlpi_addr);
                 break;
               case DT_SYMTAB:
-                symtab = reinterpret_cast<ElfW(Sym)*>(dyn->d_un.d_ptr);
+                symtab = reinterpret_cast<ElfW(Sym)*>(
+                    dyn->d_un.d_ptr >= info->dlpi_addr
+                        ? dyn->d_un.d_ptr
+                        : dyn->d_un.d_ptr + info->dlpi_addr);
             }
           if (gnuSymCnt == 0) gnuSymCnt = symCnt;
           for (ElfW(Word) symIndex = 0; symIndex < gnuSymCnt; symIndex++) {

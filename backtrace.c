@@ -10,6 +10,11 @@
 #include <unwind.h>
 #endif
 
+static void unwind_print(const void *pc, const char *name, size_t offset,
+                         void *userdata) {
+  printf("\t=>%s()+0x%zu\n", name, offset);
+}
+
 #if defined(__MIPSEB__) || defined(__MIPSEL__)
 struct mips_frame_info {
   void *func;
@@ -137,7 +142,10 @@ static int bsearch_index(const unsigned long base[], int len, unsigned long targ
 #if defined(__MIPSEB__) || defined(__MIPSEL__)
 /* recursively look for sp and ra. sp for stack address space, ra for text
  * section. */
-void print_caller(unsigned long sp, unsigned long ra) {
+static void do_backtrace(unsigned long sp, unsigned long ra,
+                         void (*callback)(const void *pc, const char *name,
+                                          size_t offset, void *userdata),
+                         void *userdata) {
   int index = 0;
   union mips_instruction *ip;
   unsigned int max_insns;
@@ -157,18 +165,19 @@ void print_caller(unsigned long sp, unsigned long ra) {
     return;
   }
 
-  printf("\t=>%s()+0x%lx\n", caller_name, ra - (unsigned long)ip);
+  if (callback)
+    callback((const void *)ra, caller_name, ra - (unsigned long)ip, userdata);
 
   /* only search in instructions already executed. */
   max_insns = (ra - (unsigned long)ip) / sizeof(union mips_instruction);
   if (max_insns == 0) {
-		max_insns = 128U;	/* unknown function size */
-	}
-	max_insns = max_insns < 128U ? max_insns : 128U;
+    max_insns = 128U; /* unknown function size */
+  }
+  max_insns = max_insns < 128U ? max_insns : 128U;
 
-	info.func = ip;
-	info.frame_size = 0;
-	info.func_size = 0; //not used
+  info.func = ip;
+  info.frame_size = 0;
+  info.func_size = 0; //not used
 	info.pc_offset = -1; //not used
 	info.ra = NULL;
 
@@ -190,49 +199,79 @@ void print_caller(unsigned long sp, unsigned long ra) {
 		}
 	}
 
-	/* jump to caller's stack. */
-	sp = sp + info.frame_size;
+        /* jump to caller's stack. */
+        sp = sp + info.frame_size;
 
-	if (info.ra)
-	{
-		print_caller(sp, *(info.ra));
-	}
+        if (info.ra) {
+          do_backtrace(sp, *(info.ra), callback, userdata);
+        }
+}
+
+void backtrace_run(const ucontext_t *ucontext,
+                   void (*callback)(const void *pc, const char *name,
+                                    size_t offset, void *userdata),
+                   void *userdata) {
+  unsigned long sp, ra;
+  if (ucontext) {
+    sp = ucontext->uc_mcontext.gregs[29];
+    ra = ucontext->uc_mcontext.gregs[31];
+  } else {
+    struct pt_regs regs;
+    prepare_frametrace(&regs);
+    sp = regs.regs[29];
+    ra = regs.regs[31];
+  }
+  do_backtrace(sp, ra, callback, userdata);
 }
 
 /* print back trace functions */
 void show_backtrace() {
-  struct pt_regs regs;
-  prepare_frametrace(&regs);
-
   printf("Call trace:\n");
-  print_caller(regs.regs[29], regs.regs[31]);
+  backtrace_run(NULL, unwind_print, NULL);
   printf("\n");
 }
 
 void show_backtrace_ucontext(const ucontext_t *ucontext) {
   printf("Call trace:\n");
-  print_caller(ucontext->uc_mcontext.gregs[29],
-               ucontext->uc_mcontext.gregs[31]);
+  backtrace_run(ucontext, unwind_print, NULL);
   printf("\n");
 }
+
 #else
 
-static _Unwind_Reason_Code print_unwind(struct _Unwind_Context *context,
-                                        void *unused) {
+struct BacktraceData {
+  void (*callback)(const void *pc, const char *name, size_t offset,
+                   void *userdata);
+  void *userdata;
+};
+
+static _Unwind_Reason_Code unwind_wrapper(struct _Unwind_Context *context,
+                                          void *data) {
+  struct BacktraceData *userdata = data;
   const void *ip = (const void *)_Unwind_GetIP(context);
   if (!ip) return _URC_END_OF_STACK;
-  printf("\t=>%s()+0x%zu\n", addr_to_name(ip), addr_to_offset(ip));
+  if (userdata->callback)
+    userdata->callback(ip, addr_to_name(ip), addr_to_offset(ip),
+                       userdata->userdata);
   return _URC_NO_REASON;
 }
 
 void show_backtrace() {
   printf("Call trace:\n");
-  _Unwind_Backtrace(print_unwind, NULL);
+  backtrace_run(NULL, unwind_print, NULL);
   printf("\n");
 }
 
 void show_backtrace_ucontext(const struct ucontext *ucontext) {
   show_backtrace();
+}
+
+void backtrace_run(const ucontext_t *ucontext,
+                   void (*callback)(const void *pc, const char *name,
+                                    size_t offset, void *userdata),
+                   void *userdata) {
+  struct BacktraceData data = {callback, userdata};
+  _Unwind_Backtrace(unwind_wrapper, &data);
 }
 
 #endif

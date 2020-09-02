@@ -1,6 +1,7 @@
 #ifndef __BACKTRACE_H
 #define __BACKTRACE_H
-#include <asm/ptrace.h> //for struct pt_regs
+#include <asm/ptrace.h>  //for struct pt_regs
+#include <ucontext.h>
 
 /*
  * Major opcodes; before MIPS IV cop1x was called cop3.
@@ -216,25 +217,32 @@ struct ma_format {	/* FPU multipy and add format (MIPS IV) */
 	unsigned int opcode : 6;
 };
 
-#else /* !defined (__MIPSEB__) && !defined (__MIPSEL__) */
-#error "MIPS but neither __MIPSEL__ nor __MIPSEB__?"
 #endif
 
+#if defined(__MIPSEB__) || defined(__MIPSEL__)
 union mips_instruction {
 	unsigned int word;
 	unsigned short halfword[2];
 	unsigned char byte[4];
-	struct j_format j_format;
-	struct i_format i_format;
-	struct u_format u_format;
-	struct c_format c_format;
-	struct r_format r_format;
-	struct f_format f_format;
+        struct j_format j_format;
+        struct i_format i_format;
+        struct u_format u_format;
+        struct c_format c_format;
+        struct r_format r_format;
+        struct f_format f_format;
         struct ma_format ma_format;
 };
-
-char * addr_to_name(unsigned long addr);
-void show_backtrace();
-
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+const char *addr_to_name(const void *addr);
+size_t addr_to_offset(const void *addr);
+void show_backtrace();
+void show_backtrace_ucontext(const ucontext_t *ucontext);
+#ifdef __cplusplus
+};
+#endif
+
+#endif

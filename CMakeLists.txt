@@ -10,6 +10,7 @@ add_library(backtrace
         Elf.h
         Elf.cpp)
 target_compile_definitions(backtrace PUBLIC _GNU_SOURCE)
+target_include_directories(backtrace PUBLIC .)
 target_link_libraries(backtrace dl)
 
 add_executable(backtrace_test main.c)

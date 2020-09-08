@@ -231,6 +231,7 @@ const char* Elf::SymbolName(size_t offset) {
   return (const char*)memory_ + strtab_->sh_offset + offset;
 }
 Function* Elf::Locate(const void* pc) {
+  if (funcs_.empty()) return nullptr;
   auto func = funcs_.lower_bound(pc);
   if (func == funcs_.end()) {
     if (funcs_.rbegin()->second.end() >= pc) return &funcs_.rbegin()->second;

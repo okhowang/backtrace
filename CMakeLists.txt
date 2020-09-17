@@ -13,6 +13,6 @@ target_compile_definitions(backtrace PUBLIC _GNU_SOURCE)
 target_include_directories(backtrace PUBLIC .)
 target_link_libraries(backtrace dl)
 
-add_executable(backtrace_test main.c)
+add_executable(backtrace_test main.cpp)
 # target_link_options(backtrace_test PRIVATE -static)
 target_link_libraries(backtrace_test backtrace)

@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <exception>
+
 #include "backtrace.h"
 
 int func2(int a, int b);
@@ -22,7 +24,7 @@ int func1(int a, int b) {
 }
 
 void handler(int no, siginfo_t *info, void *ctx) {
-  ucontext_t *context = ctx;
+  ucontext_t *context = static_cast<ucontext_t *>(ctx);
   show_backtrace_ucontext(context);
   exit(0);
 }
@@ -33,11 +35,15 @@ int func0(int a, int b) {
   return c;
 }
 
-int abortFunction() { abort(); }
+void abortFunction() { abort(); }
 
-int abortFunction1() { abortFunction(); }
+void abortFunction1() { abortFunction(); }
 
-int main() {
+void exceptionFunction() { throw std::exception(); }
+
+void exceptionFunction1() { exceptionFunction(); }
+
+int main() noexcept {
   struct sigaction sega;
   sega.sa_sigaction = handler;
   sega.sa_flags = SA_SIGINFO;
@@ -49,7 +55,11 @@ int main() {
   int c = func0(a, b);
   printf("%s: c = %d\n", __FUNCTION__, c);
 
-  printf("funcptr's name = %s\n", addr_to_name(funcptr));
-  abortFunction1();
+  printf("funcptr's name = %s\n",
+         addr_to_name(reinterpret_cast<const void *>(funcptr)));
+  if (0)
+    abortFunction1();
+  else
+    exceptionFunction1();
   return 0;
 }

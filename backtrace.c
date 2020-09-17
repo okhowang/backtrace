@@ -125,9 +125,9 @@ static void do_backtrace(unsigned long sp, unsigned long ra, unsigned long fp,
     const char *name = addr_to_name((const void *)raw_ra);
     if (name != NULL) {
       caller_name = name;
+      offset = addr_to_offset((const void *)raw_ra);
+      ip = (union mips_instruction *)(raw_ra - offset);
     }
-    offset = addr_to_offset((const void *)raw_ra);
-    ip = (union mips_instruction *)(raw_ra - offset);
   }
 
   if (callback)
